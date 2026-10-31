@@ -23,7 +23,7 @@ export function setToken(token) {
 export async function api(path, { method = 'GET', body } = {}) {
   const isForm = body instanceof FormData;
   const token = getToken();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`https://edu-insight-blog.onrender.com/api${path}`, {
     method,
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),

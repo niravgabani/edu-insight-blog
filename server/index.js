@@ -9,6 +9,7 @@ import { NO_ID } from './mongo.js';
 import { ensureDb } from './seed.js';
 import { makeToken, verifyToken, hashPassword, checkPassword } from './auth.js';
 import { pageMeta, headTags } from '../src/seo.js';
+import cors from 'cors';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(SERVER_DIR, '..');
@@ -18,6 +19,18 @@ fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json({ limit: '5mb' }));
+
+app.use(cors({
+  origin: [
+    'https://edu-insight-blog.web.app',
+    'https://edu-insight-blog.firebaseapp.com',
+    'http://localhost:5173',
+    'http://localhost:5174',
+  ],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 
 // Website routes a post slug can't use
 const RESERVED = new Set(['blog', 'search', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);

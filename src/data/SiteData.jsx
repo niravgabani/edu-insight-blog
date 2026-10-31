@@ -56,7 +56,7 @@ export function SiteProvider({ children }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch('/api/site')
+    fetch('https://edu-insight-blog.onrender.com/api/site')
       .then((r) => {
         if (!r.ok) throw new Error(r.statusText);
         return r.json();

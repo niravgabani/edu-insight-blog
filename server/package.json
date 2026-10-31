@@ -8,6 +8,7 @@
     "start": "node --env-file-if-exists=.env index.js"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "express": "^4.21.2",
     "mongodb": "^6.21.0",
     "multer": "^2.0.0"
