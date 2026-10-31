@@ -22,6 +22,8 @@ app.use(express.json({ limit: '5mb' }));
 
 app.use(cors({
   origin: [
+    'https://dailyinfoscope.com',
+    'https://www.dailyinfoscope.com',
     'https://edu-insight-blog.web.app',
     'https://edu-insight-blog.firebaseapp.com',
     'http://localhost:5173',
