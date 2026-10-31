@@ -1,0 +1,15 @@
+{
+  "name": "edu-blog-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch-path=index.js --watch-path=mongo.js --watch-path=auth.js --watch-path=seed.js --watch-path=../src/seo.js index.js",
+    "start": "node --env-file-if-exists=.env index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mongodb": "^6.21.0",
+    "multer": "^2.0.0"
+  }
+}
