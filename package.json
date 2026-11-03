@@ -11,7 +11,7 @@
     "admin": "npm --prefix admin run dev",
     "build:all": "vite build && npm --prefix admin run build",
     "start": "npm --prefix server start",
-    "build:firebase": "vite build && npm --prefix admin run build -- --outDir ../dist/admin --emptyOutDir"
+    "build:firebase": "vite build && npm --prefix admin run build -- --outDir ../dist/admin --emptyOutDir && node scripts/fetch-seo-files.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
