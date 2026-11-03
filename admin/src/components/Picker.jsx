@@ -85,7 +85,7 @@ function SearchAdd({ search, exclude, placeholder, onPick }) {
     <div className="picker-search">
       <input
         value={text}
-        placeholder={placeholder.replace(/^\+ ?/, 'Search to add ')}
+        placeholder={placeholder.replace(/^\+ ?(add )?/i, 'Search to add ')}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 200)}
         onChange={(e) => setText(e.target.value)}

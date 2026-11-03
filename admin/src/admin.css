@@ -649,6 +649,7 @@ a.title-link:hover {
 
 .section-grid .panel {
   margin-bottom: 0;
+  min-width: 0;
 }
 
 .section-grid select {
@@ -801,6 +802,8 @@ a.title-link:hover {
 .picker ol {
   list-style: none;
   display: grid;
+  /* minmax(0, …) lets rows shrink so long titles end with "…" instead of overflowing the card */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   margin-top: 0.75rem;
 }
