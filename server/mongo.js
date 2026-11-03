@@ -21,8 +21,10 @@ export async function connect(uri = process.env.MONGODB_URI) {
   await Promise.all([
     db.collection('posts').createIndex({ id: 1 }, { unique: true }),
     db.collection('posts').createIndex({ slug: 1 }, { unique: true }),
-    db.collection('posts').createIndex({ status: 1, date: -1 }),
-    db.collection('posts').createIndex({ status: 1, category: 1, date: -1 }),
+    // Match the "newest first" sort exactly so MongoDB never has to sort thousands of articles in memory
+    db.collection('posts').createIndex({ status: 1, date: -1, createdAt: -1 }),
+    db.collection('posts').createIndex({ status: 1, category: 1, date: -1, createdAt: -1 }),
+    db.collection('posts').createIndex({ date: -1, createdAt: -1 }),
     db.collection('categories').createIndex({ slug: 1 }, { unique: true }),
     db.collection('messages').createIndex({ id: 1 }, { unique: true }),
   ]);
