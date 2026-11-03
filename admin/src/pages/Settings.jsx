@@ -74,7 +74,7 @@ export default function Settings({ onUserChange }) {
                 <input
                   value={site.siteUrl}
                   onChange={(e) => setSite({ ...site, siteUrl: e.target.value })}
-                  placeholder="https://www.eduinsight.info"
+                  placeholder="https://dailyinfoscope.com"
                 />
               </label>
               <label>

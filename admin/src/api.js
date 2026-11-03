@@ -1,6 +1,8 @@
 const TOKEN_KEY = 'admin_token';
 
 export const SITE_URL = import.meta.env.VITE_SITE_URL || '';
+// Address of the API server; empty = same address as the admin panel
+export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export function getToken() {
   try {
@@ -23,7 +25,7 @@ export function setToken(token) {
 export async function api(path, { method = 'GET', body } = {}) {
   const isForm = body instanceof FormData;
   const token = getToken();
-  const res = await fetch(`https://edu-insight-blog.onrender.com/api${path}`, {
+  const res = await fetch(`${API_URL}/api${path}`, {
     method,
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),

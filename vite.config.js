@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// The API server (server/) runs on port 5000
-const api = 'https://edu-insight-blog.onrender.com';
+// API used by the dev server. Set API_PROXY=http://localhost:5000 to use the local server (server/).
+const api = process.env.API_PROXY || 'https://edu-insight-blog.onrender.com';
 
 export default defineConfig({
   plugins: [react()],

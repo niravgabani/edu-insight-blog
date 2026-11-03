@@ -556,6 +556,7 @@ a.title-link:hover {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 1rem;
+  align-items: center;
 }
 
 .pager button {
@@ -566,6 +567,12 @@ a.title-link:hover {
   background: #fff;
   cursor: pointer;
   font-weight: 500;
+  padding: 0 12px;
+}
+
+.pager button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .pager button.active {
@@ -1057,4 +1064,48 @@ a.title-link:hover {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+}
+
+.picker-search {
+  position: relative;
+  margin-top: 0.75rem;
+}
+
+.picker-search ul {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 280px;
+  overflow-y: auto;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.picker-search button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-search button:hover {
+  background: var(--primary-soft);
+}
+
+.picker-search img {
+  width: 44px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
 }

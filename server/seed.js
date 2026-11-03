@@ -27,8 +27,8 @@ export async function ensureDb() {
   if (await mongo.settings().findOne({ _id: 'site' })) return;
   await mongo.settings().insertOne({
     _id: 'site',
-    siteName: 'Edu Insight',
-    siteDomain: 'eduinsight.info',
+    siteName: 'Daily InfoScope',
+    siteDomain: 'dailyinfoscope.com',
     home: {
       hero: [],
       popular: [],

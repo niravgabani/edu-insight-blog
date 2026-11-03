@@ -810,6 +810,13 @@ body {
   color: #fff;
 }
 
+.pagination .gap {
+  display: grid;
+  place-items: center;
+  height: 2.5rem;
+  color: #999;
+}
+
 .view-all {
   display: flex;
   justify-content: center;
@@ -822,6 +829,10 @@ body {
   display: grid;
   place-items: center;
   color: var(--gray);
+}
+
+.page-loading {
+  min-height: 50vh;
 }
 
 .spinner {

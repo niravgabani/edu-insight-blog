@@ -4,3 +4,4 @@ dist
 
 # Images uploaded from the admin panel
 server/uploads/
+.firebase/

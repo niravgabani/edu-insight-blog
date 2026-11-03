@@ -9,6 +9,7 @@ import { NO_ID } from './mongo.js';
 import { ensureDb } from './seed.js';
 import { makeToken, verifyToken, hashPassword, checkPassword } from './auth.js';
 import { pageMeta, headTags } from '../src/seo.js';
+import * as cloudinary from './cloudinary.js';
 import cors from 'cors';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -68,32 +69,89 @@ const getCategories = () => mongo.categories().find({}, { projection: { _id: 0, 
 
 // ---------- Public API (used by the website) ----------
 
+// Articles are loaded page by page — the site has thousands of them.
+// Cards only need these fields; the full content is sent by /api/posts/:slug.
+const SUMMARY = { projection: { _id: 0, id: 1, slug: 1, title: 1, category: 1, date: 1, image: 1, excerpt: 1, lang: 1 } };
+const PUBLISHED = { status: 'published' };
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const intParam = (value, fallback, max) => Math.min(Math.max(parseInt(value, 10) || fallback, 1), max);
+
+// Images uploaded to this server are stored as "/uploads/..." — make them absolute so they
+// also load when the website runs on another domain (e.g. Firebase Hosting)
+app.set('trust proxy', true);
+const uploadsBase = (req) => `${req.protocol}://${req.get('host')}`;
+const fixImage = (req, url) => (url?.startsWith('/uploads/') ? uploadsBase(req) + url : url);
+const fixSummary = (req) => ({ id, ...p }) => ({ ...p, image: fixImage(req, p.image) });
+
 app.get(
   '/api/site',
   wrap(async (req, res) => {
-    const [settings, categories, posts] = await Promise.all([
+    const [settings, categories, latest] = await Promise.all([
       getSettings(),
       getCategories(),
-      mongo
-        .posts()
-        .find({ status: 'published' }, { projection: { _id: 0, createdAt: 0, status: 0 } })
-        .sort(NEWEST)
-        .toArray(),
+      mongo.posts().find(PUBLISHED, SUMMARY).sort(NEWEST).limit(8).toArray(),
     ]);
-    const slugOf = new Map(posts.map((p) => [p.id, p.slug]));
-    const toSlugs = (ids) => (ids || []).map((id) => slugOf.get(id)).filter(Boolean);
     const h = settings.home || {};
+    const chosenIds = [...HOME_LISTS.flatMap((k) => h[k] || []), h.trendingImage].filter(Boolean);
+    const chosen = await mongo.posts().find({ ...PUBLISHED, id: { $in: chosenIds } }, SUMMARY).toArray();
+    const byId = new Map(chosen.map((p) => [p.id, p]));
+    const toPosts = (ids) => (ids || []).map((id) => byId.get(id)).filter(Boolean).map(fixSummary(req));
 
     res.json({
       settings: publicSettings(settings),
       categories,
-      posts: posts.map(({ id, ...rest }) => rest),
+      latest: latest.map(fixSummary(req)),
       home: {
-        ...Object.fromEntries(HOME_LISTS.map((k) => [k, toSlugs(h[k])])),
-        trendingImage: slugOf.get(h.trendingImage) ?? null,
+        ...Object.fromEntries(HOME_LISTS.map((k) => [k, toPosts(h[k])])),
+        trendingImage: toPosts([h.trendingImage])[0] ?? null,
         topCategories: (h.topCategories || []).filter((s) => categories.some((c) => c.slug === s)),
       },
     });
+  })
+);
+
+// List of articles: ?category=slug&q=search&page=1&limit=9&offset=0
+app.get(
+  '/api/posts',
+  wrap(async (req, res) => {
+    const filter = { ...PUBLISHED };
+    if (req.query.category) filter.category = String(req.query.category);
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) {
+      const re = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ title: re }, { excerpt: re }, { keywords: re }];
+    }
+    const limit = intParam(req.query.limit, 9, 50);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const total = Math.max((await mongo.posts().countDocuments(filter)) - offset, 0);
+    const pages = Math.max(Math.ceil(total / limit), 1);
+    const page = Math.min(intParam(req.query.page, 1, 100000), pages);
+    const posts = await mongo
+      .posts()
+      .find(filter, SUMMARY)
+      .sort(NEWEST)
+      .skip(offset + (page - 1) * limit)
+      .limit(limit)
+      .toArray();
+    res.json({ posts: posts.map(fixSummary(req)), total, page, pages });
+  })
+);
+
+// One article with 3 related articles from the same category
+app.get(
+  '/api/posts/:slug',
+  wrap(async (req, res) => {
+    const post = await mongo.posts().findOne({ ...PUBLISHED, slug: req.params.slug }, { projection: { _id: 0, id: 0, status: 0, createdAt: 0 } });
+    if (!post) return bad(res, 'Article not found', 404);
+    const related = await mongo
+      .posts()
+      .find({ ...PUBLISHED, category: post.category, slug: { $ne: post.slug } }, SUMMARY)
+      .sort(NEWEST)
+      .limit(3)
+      .toArray();
+    post.image = fixImage(req, post.image);
+    post.content = post.content.replace(/(src=["'])\/uploads\//g, `$1${uploadsBase(req)}/uploads/`);
+    res.json({ post, related: related.map(fixSummary(req)) });
   })
 );
 
@@ -165,10 +223,46 @@ admin.get(
 );
 
 // Posts
+// ?q=&category=&status=&lang=&page=  (20 per page)
 admin.get(
   '/posts',
   wrap(async (req, res) => {
-    res.json(await mongo.posts().find({}, LIST_FIELDS).sort(NEWEST).toArray());
+    const filter = {};
+    for (const key of ['category', 'status', 'lang']) if (req.query[key]) filter[key] = String(req.query[key]);
+    if (filter.lang === 'en') filter.lang = { $in: ['en', null] }; // older articles have no language field
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) {
+      const re = new RegExp(escapeRegex(q), 'i');
+      filter.$or = [{ title: re }, { slug: re }];
+    }
+    const limit = 20;
+    const total = await mongo.posts().countDocuments(filter);
+    const pages = Math.max(Math.ceil(total / limit), 1);
+    const page = Math.min(intParam(req.query.page, 1, 100000), pages);
+    const posts = await mongo
+      .posts()
+      .find(filter, LIST_FIELDS)
+      .sort(NEWEST)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .toArray();
+    res.json({ posts, total, page, pages });
+  })
+);
+
+// Small lists for pickers: ?q=title search, or ?ids=a,b,c for already chosen articles
+admin.get(
+  '/post-options',
+  wrap(async (req, res) => {
+    const fields = { projection: { _id: 0, id: 1, title: 1, image: 1 } };
+    if (req.query.ids) {
+      const ids = String(req.query.ids).split(',').slice(0, 100);
+      return res.json(await mongo.posts().find({ id: { $in: ids } }, fields).toArray());
+    }
+    const filter = { ...PUBLISHED };
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) filter.title = new RegExp(escapeRegex(q), 'i');
+    res.json(await mongo.posts().find(filter, fields).sort(NEWEST).limit(30).toArray());
   })
 );
 
@@ -391,21 +485,29 @@ admin.delete(
   })
 );
 
-// Image upload (files are stored on disk in server/uploads)
+// Image upload: to Cloudinary when CLOUDINARY_URL is set, otherwise to disk in server/uploads
+// (hosts like Render's free plan erase that folder on every restart — use Cloudinary there)
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (req, file, cb) =>
-      cb(null, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
-  }),
+  storage: cloudinary.enabled()
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: UPLOAD_DIR,
+        filename: (req, file, cb) =>
+          cb(null, `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
+      }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => cb(null, /^image\/(jpeg|png|webp|gif|avif)$/.test(file.mimetype)),
 });
 
-admin.post('/upload', upload.single('image'), (req, res) => {
-  if (!req.file) return bad(res, 'Please choose a JPG, PNG, WEBP, GIF or AVIF image');
-  res.status(201).json({ url: `/uploads/${req.file.filename}` });
-});
+admin.post(
+  '/upload',
+  upload.single('image'),
+  wrap(async (req, res) => {
+    if (!req.file) return bad(res, 'Please choose a JPG, PNG, WEBP, GIF or AVIF image');
+    const url = cloudinary.enabled() ? await cloudinary.uploadBuffer(req.file.buffer) : `/uploads/${req.file.filename}`;
+    res.status(201).json({ url });
+  })
+);
 
 // ---------- SEO: sitemap, robots.txt, tags in the page HTML ----------
 
@@ -467,7 +569,7 @@ async function seoForRequest(req) {
     if (page > 1) return { status: 200, meta: pageMeta({ settings, origin, path: `/blog?page=${page}`, title: `All Articles - Page ${page}` }) };
     return result({ title: 'All Articles' });
   }
-  if (segments.length === 2 && segments[0] === 'category') {
+  if (segments.length === 2 && segments[0].toLowerCase() === 'category') {
     const category = await mongo.categories().findOne({ slug: segments[1] }, NO_ID);
     return category ? result({ category }) : notFound();
   }

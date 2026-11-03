@@ -1,13 +1,15 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import ArticleCards from '../components/ArticleCards.jsx';
-import Pagination, { paginate } from '../components/Pagination.jsx';
+import Pagination, { pageParam } from '../components/Pagination.jsx';
 import useSeo from '../useSeo.js';
-import { useSite } from '../data/SiteData.jsx';
+import { useApi, query } from '../api.js';
+import { useSite, Loading } from '../data/SiteData.jsx';
 
 export default function Blog() {
   const [params] = useSearchParams();
-  const { categories, posts } = useSite(); // already sorted newest first by the API
-  const { page, totalPages, pageItems } = paginate(posts, params);
+  const { categories } = useSite();
+  const { data } = useApi(`/api/posts${query({ page: pageParam(params) })}`);
+  const page = data?.page ?? pageParam(params);
   useSeo({ title: page > 1 ? `All Articles - Page ${page}` : 'All Articles' });
 
   return (
@@ -16,7 +18,7 @@ export default function Blog() {
         <h1>
           All <span>Articles</span>
         </h1>
-        <p className="result-count">{posts.length} articles</p>
+        {data && <p className="result-count">{data.total} articles</p>}
       </div>
       <div className="category-chips">
         {categories.map((c) => (
@@ -25,8 +27,14 @@ export default function Blog() {
           </Link>
         ))}
       </div>
-      <ArticleCards posts={pageItems} />
-      <Pagination page={page} totalPages={totalPages} />
+      {data ? (
+        <>
+          <ArticleCards posts={data.posts} />
+          <Pagination page={data.page} totalPages={data.pages} />
+        </>
+      ) : (
+        <Loading />
+      )}
     </div>
   );
 }

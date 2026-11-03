@@ -5,23 +5,24 @@ import NotFound from './NotFound.jsx';
 import useSeo from '../useSeo.js';
 import { isRtl } from '../seo.js';
 import { formatDate } from '../utils.js';
-import { useSite } from '../data/SiteData.jsx';
+import { useApi } from '../api.js';
+import { useSite, Loading } from '../data/SiteData.jsx';
 
 export default function Article() {
   const { slug } = useParams();
-  const { getPost, getCategory, posts, postsByCategory } = useSite();
-  const post = getPost(slug);
+  const { getCategory, latest: newest } = useSite();
+  const { data, error } = useApi(`/api/posts/${encodeURIComponent(slug)}`);
+  const post = data?.post;
   const postCategory = post && getCategory(post.category);
-  useSeo(post ? { post, category: postCategory } : { notFound: true });
+  useSeo(data === undefined ? { loading: true } : post ? { post, category: postCategory } : { notFound: true });
 
+  if (data === undefined && !error) return <Loading />;
   if (!post) return <NotFound />;
 
   const category = postCategory ?? { slug: post.category, name: post.category };
   const dir = isRtl(post.lang) ? 'rtl' : undefined;
-  const latest = posts.filter((p) => p.slug !== post.slug).slice(0, 6);
-  const related = postsByCategory(post.category)
-    .filter((p) => p.slug !== post.slug)
-    .slice(0, 3);
+  const latest = newest.filter((p) => p.slug !== post.slug).slice(0, 6);
+  const { related } = data;
 
   return (
     <>

@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
+
 // Ordered multi-select: pick items from a dropdown, reorder or remove them.
-// options: [{ value, label, image? }]
-export default function Picker({ options, value, onChange, max, placeholder = '+ Add...' }) {
+// options: [{ value, label, image? }] — must include the chosen values.
+// search: optional async (text) => options; shows a search box instead of the dropdown (for long lists).
+export default function Picker({ options, value, onChange, max, placeholder = '+ Add...', search }) {
   const chosen = value.map((v) => options.find((o) => o.value === v)).filter(Boolean);
   const available = options.filter((o) => !value.includes(o.value));
 
@@ -45,7 +48,10 @@ export default function Picker({ options, value, onChange, max, placeholder = '+
           ))}
         </ol>
       )}
-      {(!max || chosen.length < max) && available.length > 0 && (
+      {(!max || chosen.length < max) && search && (
+        <SearchAdd search={search} exclude={value} placeholder={placeholder} onPick={(v) => onChange([...value, v])} />
+      )}
+      {(!max || chosen.length < max) && !search && available.length > 0 && (
         <select value="" onChange={(e) => e.target.value && onChange([...value, e.target.value])}>
           <option value="">{placeholder}</option>
           {available.map((o) => (
@@ -54,6 +60,53 @@ export default function Picker({ options, value, onChange, max, placeholder = '+
             </option>
           ))}
         </select>
+      )}
+    </div>
+  );
+}
+
+function SearchAdd({ search, exclude, placeholder, onPick }) {
+  const [text, setText] = useState('');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const timer = setTimeout(() => search(text.trim()).then((r) => active && setResults(r)), 300);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [text, open, search]);
+
+  const shown = results.filter((o) => !exclude.includes(o.value));
+  return (
+    <div className="picker-search">
+      <input
+        value={text}
+        placeholder={placeholder.replace(/^\+ ?/, 'Search to add ')}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        onChange={(e) => setText(e.target.value)}
+      />
+      {open && shown.length > 0 && (
+        <ul>
+          {shown.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                onClick={() => {
+                  onPick(o.value);
+                  setText('');
+                }}
+              >
+                {o.image && <img src={o.image} alt="" />}
+                <span className="picker-label">{o.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

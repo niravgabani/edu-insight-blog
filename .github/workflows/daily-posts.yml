@@ -1,0 +1,57 @@
+# Writes and publishes new articles every day (server/scripts/daily-posts.js).
+#
+# Setup (GitHub repo → Settings → Secrets and variables → Actions):
+#   Secrets:   ANTHROPIC_API_KEY, MONGODB_URI  (required)
+#              PEXELS_API_KEY, CLOUDINARY_URL  (optional, for article photos)
+#   Variables: DAILY_POSTS_COUNT, DAILY_POSTS_COUNTRIES, DAILY_POSTS_LANGUAGE,
+#              DAILY_POSTS_STATUS, DAILY_POSTS_MODEL  (optional, see the script for defaults)
+# MongoDB Atlas → Network Access must allow GitHub's servers (0.0.0.0/0).
+name: Daily posts
+
+on:
+  schedule:
+    - cron: '30 0 * * *' # every day at 00:30 UTC (06:00 in India)
+  workflow_dispatch: # "Run workflow" button in the Actions tab
+    inputs:
+      count:
+        description: Number of articles to write
+        default: '15'
+
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      # Does nothing until the secrets are added, instead of failing every day
+      - id: check
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$MONGODB_URI" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::Add the ANTHROPIC_API_KEY and MONGODB_URI secrets to enable daily posts."; fi
+        working-directory: .
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v4
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - if: steps.check.outputs.ready == 'true'
+        run: npm ci
+      - if: steps.check.outputs.ready == 'true'
+        run: node scripts/daily-posts.js --count "${{ github.event.inputs.count || vars.DAILY_POSTS_COUNT || 15 }}"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+          DAILY_POSTS_COUNTRIES: ${{ vars.DAILY_POSTS_COUNTRIES }}
+          DAILY_POSTS_LANGUAGE: ${{ vars.DAILY_POSTS_LANGUAGE }}
+          DAILY_POSTS_STATUS: ${{ vars.DAILY_POSTS_STATUS }}
+          DAILY_POSTS_MODEL: ${{ vars.DAILY_POSTS_MODEL }}

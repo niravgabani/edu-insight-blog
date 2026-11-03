@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import useSeo from '../useSeo.js';
+import { API_URL } from '../api.js';
 
 const empty = { name: '', email: '', subject: '', message: '' };
 
@@ -29,7 +30,7 @@ export default function ContactUs() {
     setSending(true);
     setServerError('');
     try {
-      const res = await fetch('https://edu-insight-blog.onrender.com/api/contact', {
+      const res = await fetch(`${API_URL}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

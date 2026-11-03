@@ -5,15 +5,17 @@ import { headTags, pageMeta } from './seo.js';
 
 // Sets the page title, meta description, Open Graph/Twitter tags, canonical URL and structured data.
 // Usage: useSeo({ post, category }) for articles, useSeo({ title: 'Contact Us' }) for simple pages.
+// { loading: true } leaves the current tags alone until the page's data has arrived.
 export default function useSeo(options = {}) {
   const { settings } = useSite();
   const { pathname, search } = useLocation();
-  const { post, category, title, description, noindex, notFound } = options;
+  const { post, category, title, description, noindex, notFound, loading } = options;
   // Keep ?page=N in the canonical URL of paginated lists
   const page = new URLSearchParams(search).get('page');
   const path = pathname + (page && page !== '1' ? `?page=${page}` : '');
 
   useEffect(() => {
+    if (loading) return;
     const meta = pageMeta({
       settings,
       origin: window.location.origin,
@@ -37,5 +39,5 @@ export default function useSeo(options = {}) {
       if (text) el.textContent = text;
       document.head.appendChild(el);
     }
-  }, [settings, path, post, category, title, description, noindex, notFound]);
+  }, [settings, path, post, category, title, description, noindex, notFound, loading]);
 }

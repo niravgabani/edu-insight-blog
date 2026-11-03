@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, formatDate, SITE_URL, languageName } from '../api.js';
-
-const PER_PAGE = 15;
+import { api, formatDate, SITE_URL, LANGUAGES, languageName } from '../api.js';
 
 export default function Posts() {
-  const [posts, setPosts] = useState(null);
+  const [result, setResult] = useState(null); // { posts, total, page, pages } from the server
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
@@ -14,47 +12,52 @@ export default function Posts() {
   const [lang, setLang] = useState('');
   const [page, setPage] = useState(1);
 
+  const [reload, setReload] = useState(0);
+
   useEffect(() => {
-    Promise.all([api('/admin/posts'), api('/admin/categories')])
-      .then(([p, c]) => {
-        setPosts(p);
-        setCategories(c);
-      })
+    api('/admin/categories')
+      .then(setCategories)
       .catch((e) => setError(e.message));
   }, []);
 
+  // Filtering and paging happen on the server (there can be thousands of articles)
+  useEffect(() => {
+    const params = new URLSearchParams({ q: q.trim(), category: cat, status, lang, page });
+    let active = true;
+    const timer = setTimeout(
+      () =>
+        api(`/admin/posts?${params}`)
+          .then((r) => active && setResult(r))
+          .catch((e) => active && setError(e.message)),
+      q ? 300 : 0 // wait for the user to stop typing
+    );
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [q, cat, status, lang, page, reload]);
+
   const catName = (slug) => categories.find((c) => c.slug === slug)?.name ?? slug;
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (posts || []).filter(
-      (p) =>
-        (!term || p.title.toLowerCase().includes(term) || p.slug.includes(term)) &&
-        (!cat || p.category === cat) &&
-        (!status || p.status === status) &&
-        (!lang || (p.lang || 'en') === lang)
-    );
-  }, [posts, q, cat, status, lang]);
-
-  useEffect(() => setPage(1), [q, cat, status, lang]);
-
-  const languages = useMemo(() => [...new Set((posts || []).map((p) => p.lang || 'en'))].sort(), [posts]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-  const pageItems = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  // Changing a filter goes back to page 1
+  const filter = (setter) => (e) => {
+    setter(e.target.value);
+    setPage(1);
+  };
 
   const remove = async (post) => {
     if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
     try {
       await api(`/admin/posts/${post.id}`, { method: 'DELETE' });
-      setPosts((list) => list.filter((p) => p.id !== post.id));
+      setReload((n) => n + 1);
     } catch (e) {
       alert(e.message);
     }
   };
 
   if (error) return <p className="error-text">{error}</p>;
-  if (!posts) return <div className="spinner"></div>;
+  if (!result) return <div className="spinner"></div>;
+  const { posts: pageItems, total, pages: totalPages } = result;
 
   return (
     <>
@@ -70,9 +73,9 @@ export default function Posts() {
       <div className="filters">
         <div className="search">
           <i className="fa-solid fa-magnifying-glass"></i>
-          <input placeholder="Search articles..." value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="Search articles..." value={q} onChange={filter(setQ)} />
         </div>
-        <select value={cat} onChange={(e) => setCat(e.target.value)}>
+        <select value={cat} onChange={filter(setCat)}>
           <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c.slug} value={c.slug}>
@@ -80,14 +83,14 @@ export default function Posts() {
             </option>
           ))}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select value={status} onChange={filter(setStatus)}>
           <option value="">All statuses</option>
           <option value="published">Published</option>
           <option value="draft">Draft</option>
         </select>
-        <select value={lang} onChange={(e) => setLang(e.target.value)}>
+        <select value={lang} onChange={filter(setLang)}>
           <option value="">All languages</option>
-          {languages.map((code) => (
+          {LANGUAGES.map(([code]) => (
             <option key={code} value={code}>
               {languageName(code)}
             </option>
@@ -96,7 +99,7 @@ export default function Posts() {
       </div>
 
       <div className="panel">
-        <p className="muted small">{filtered.length} articles</p>
+        <p className="muted small">{total} articles</p>
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -157,11 +160,15 @@ export default function Posts() {
 
         {totalPages > 1 && (
           <div className="pager">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <button key={n} className={n === page ? 'active' : ''} onClick={() => setPage(n)}>
-                {n}
-              </button>
-            ))}
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <i className="fa-solid fa-chevron-left"></i> Previous
+            </button>
+            <span className="muted small">
+              Page {page} of {totalPages}
+            </span>
+            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+              Next <i className="fa-solid fa-chevron-right"></i>
+            </button>
           </div>
         )}
       </div>

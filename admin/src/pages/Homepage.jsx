@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, SITE_URL } from '../api.js';
 import Picker from '../components/Picker.jsx';
 
@@ -12,23 +12,33 @@ const sections = [
 
 export default function Homepage() {
   const [home, setHome] = useState(null);
-  const [posts, setPosts] = useState([]);
+  const [known, setKnown] = useState({}); // id -> { id, title, image } for articles shown in the pickers
   const [categories, setCategories] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    Promise.all([api('/admin/settings'), api('/admin/posts'), api('/admin/categories')])
-      .then(([s, p, c]) => {
+    Promise.all([api('/admin/settings'), api('/admin/categories')])
+      .then(async ([s, c]) => {
+        // Only the chosen articles are loaded; others are found by searching
+        const ids = [...['hero', 'popular', 'latest', 'trending', 'featured'].flatMap((k) => s.home[k] || []), s.home.trendingImage];
+        const chosen = await api(`/admin/post-options?ids=${ids.filter(Boolean).join(',')}`);
+        remember(chosen);
         setHome(s.home);
-        setPosts(p.filter((x) => x.status === 'published'));
         setCategories(c);
       })
       .catch((e) => setError(e.message));
   }, []);
 
-  const postOptions = posts.map((p) => ({ value: p.id, label: p.title, image: p.image }));
+  const remember = (list) => setKnown((k) => ({ ...k, ...Object.fromEntries(list.map((p) => [p.id, p])) }));
+  const toOption = (p) => ({ value: p.id, label: p.title, image: p.image });
+  const postOptions = Object.values(known).map(toOption);
+  const searchPosts = useCallback(async (text) => {
+    const list = await api(`/admin/post-options?q=${encodeURIComponent(text)}`);
+    remember(list);
+    return list.map(toOption);
+  }, []);
   const set = (key, value) => setHome((h) => ({ ...h, [key]: value }));
 
   const save = async () => {
@@ -83,21 +93,22 @@ export default function Homepage() {
               onChange={(v) => set(s.key, v)}
               max={s.max}
               placeholder="+ Add article..."
+              search={searchPosts}
             />
           </div>
         ))}
 
         <div className="panel">
           <h3>Trending Image</h3>
-          <p className="muted small">Article whose image appears beside the trending list.</p>
-          <select value={home.trendingImage || ''} onChange={(e) => set('trendingImage', e.target.value || null)}>
-            <option value="">Automatic</option>
-            {posts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
+          <p className="muted small">Article whose image appears beside the trending list. Empty = automatic.</p>
+          <Picker
+            options={postOptions}
+            value={home.trendingImage ? [home.trendingImage] : []}
+            onChange={(v) => set('trendingImage', v[0] || null)}
+            max={1}
+            placeholder="+ Add article..."
+            search={searchPosts}
+          />
         </div>
 
         <div className="panel">

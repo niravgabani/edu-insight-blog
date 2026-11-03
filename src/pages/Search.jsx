@@ -1,16 +1,17 @@
 import { useSearchParams } from 'react-router-dom';
 import ArticleCards from '../components/ArticleCards.jsx';
-import Pagination, { paginate } from '../components/Pagination.jsx';
+import Pagination, { pageParam } from '../components/Pagination.jsx';
 import useSeo from '../useSeo.js';
-import { useSite } from '../data/SiteData.jsx';
+import { useApi, query } from '../api.js';
+import { Loading } from '../data/SiteData.jsx';
 
 export default function Search() {
-  const { searchPosts } = useSite();
   const [params] = useSearchParams();
-  const q = params.get('q') ?? '';
-  const results = searchPosts(q);
-  const { page, totalPages, pageItems } = paginate(results, params);
+  const q = (params.get('q') ?? '').trim();
+  const { data } = useApi(q ? `/api/posts${query({ q, page: pageParam(params) })}` : null);
   useSeo({ title: q ? `Search: ${q}` : 'Search' });
+
+  const total = q ? data?.total : 0;
 
   return (
     <div className="container" id="mainContainer">
@@ -18,14 +19,18 @@ export default function Search() {
         <h1>
           Search results for <span>"{q}"</span>
         </h1>
-        <p className="result-count">
-          {results.length} {results.length === 1 ? 'article' : 'articles'} found
-        </p>
+        {total !== undefined && (
+          <p className="result-count">
+            {total} {total === 1 ? 'article' : 'articles'} found
+          </p>
+        )}
       </div>
-      {results.length ? (
+      {q && !data ? (
+        <Loading />
+      ) : total ? (
         <>
-          <ArticleCards posts={pageItems} />
-          <Pagination page={page} totalPages={totalPages} />
+          <ArticleCards posts={data.posts} />
+          <Pagination page={data.page} totalPages={data.pages} />
         </>
       ) : (
         <p className="empty-state">No articles matched your search. Try a different keyword.</p>

@@ -10,7 +10,8 @@
     "server": "npm --prefix server run dev",
     "admin": "npm --prefix admin run dev",
     "build:all": "vite build && npm --prefix admin run build",
-    "start": "npm --prefix server start"
+    "start": "npm --prefix server start",
+    "build:firebase": "vite build && npm --prefix admin run build -- --outDir ../dist/admin --emptyOutDir"
   },
   "dependencies": {
     "react": "^18.3.1",

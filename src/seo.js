@@ -85,6 +85,19 @@ export function pageMeta({ settings, origin, path, post, category, title, descri
             { '@type': 'ListItem', position: 3, name: post.title, item: url },
           ],
         },
+        // Articles written by the daily automation carry their FAQ separately for Google's FAQ results
+        ...(post.faq?.length
+          ? [
+              {
+                '@type': 'FAQPage',
+                mainEntity: post.faq.map((f) => ({
+                  '@type': 'Question',
+                  name: f.question,
+                  acceptedAnswer: { '@type': 'Answer', text: f.answer },
+                })),
+              },
+            ]
+          : []),
       ],
     };
     return meta;

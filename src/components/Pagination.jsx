@@ -20,11 +20,17 @@ export default function Pagination({ page, totalPages }) {
           <i className="fa-solid fa-chevron-left"></i>
         </Link>
       )}
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-        <Link key={n} to={hrefFor(n)} className={n === page ? 'active' : ''}>
-          {n}
-        </Link>
-      ))}
+      {pageNumbers(page, totalPages).map((n, i) =>
+        n === null ? (
+          <span key={`gap-${i}`} className="gap">
+            …
+          </span>
+        ) : (
+          <Link key={n} to={hrefFor(n)} className={n === page ? 'active' : ''}>
+            {n}
+          </Link>
+        )
+      )}
       {page < totalPages && (
         <Link to={hrefFor(page + 1)} aria-label="Next page">
           <i className="fa-solid fa-chevron-right"></i>
@@ -34,9 +40,11 @@ export default function Pagination({ page, totalPages }) {
   );
 }
 
-export function paginate(items, searchParams, perPage = 9) {
-  const totalPages = Math.max(1, Math.ceil(items.length / perPage));
-  const requested = parseInt(searchParams.get('page'), 10) || 1;
-  const page = Math.min(Math.max(requested, 1), totalPages);
-  return { page, totalPages, pageItems: items.slice((page - 1) * perPage, page * perPage) };
+// First, last and the pages around the current one; null marks a gap ("…")
+function pageNumbers(page, total) {
+  const near = new Set([1, total, page - 2, page - 1, page, page + 1, page + 2]);
+  const list = [...near].filter((n) => n >= 1 && n <= total).sort((a, b) => a - b);
+  return list.flatMap((n, i) => (i > 0 && n - list[i - 1] > 1 ? [null, n] : [n]));
 }
+
+export const pageParam = (searchParams) => Math.max(parseInt(searchParams.get('page'), 10) || 1, 1);
