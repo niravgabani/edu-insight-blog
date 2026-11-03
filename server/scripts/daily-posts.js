@@ -196,12 +196,13 @@ const slugify = (s) =>
   String(s || '')
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
+    .normalize('NFC') // recompose letters such as Korean syllables after removing accents
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 90);
 
-const RESERVED = new Set(['blog', 'search', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
+const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
 
 async function uniqueSlug(base) {
   let slug = slugify(base) || `article-${Date.now()}`;

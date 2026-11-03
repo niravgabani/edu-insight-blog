@@ -20,16 +20,11 @@ const SITE = arg('site', 'https://lesothoeducation.info').replace(/\/+$/, '');
 const LIMIT = Number(arg('limit', 0)) || Infinity;
 const CONCURRENCY = 6;
 const PER_DAY = 25; // spread publish dates: the first 25 sitemap articles get today's date, the next 25 yesterday's, ...
-const RESERVED = new Set(['blog', 'search', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
+const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
 
-// Same rules as the server's slugify
-const slugify = (s) =>
-  String(s || '')
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '');
+// The old site's own URL segment, unchanged (only put in the standard composed Unicode form), so
+// old links can be redirected to the same path on the new domain
+const oldSlug = (url) => lastSegment(url).normalize('NFC');
 
 const lastSegment = (url) => {
   const parts = new URL(url).pathname.split('/').filter(Boolean);
@@ -135,7 +130,7 @@ function parseArticle(html, url) {
 
   // Category from the breadcrumb: Home - <a href="/Category/business/">Business</a> - title
   const crumb = $('.breadcrumb a[href*="ategory/"]').first();
-  const categorySlug = slugify(lastSegment(new URL(crumb.attr('href') || '/category/general/', SITE).href));
+  const categorySlug = oldSlug(new URL(crumb.attr('href') || '/category/general/', SITE).href).toLowerCase();
   const categoryName = crumb.text().trim() || categorySlug;
 
   // Clean the article body: no ads/scripts/tracking attributes, links to the old site become local
@@ -179,7 +174,7 @@ function parseArticle(html, url) {
 
   return {
     title,
-    slug: slugify(lastSegment(url)),
+    slug: oldSlug(url),
     categorySlug,
     categoryName,
     image: image && new URL(image, SITE).href,
@@ -212,7 +207,7 @@ async function main() {
   const failures = [];
 
   const queue = articles.map((url, index) => ({ url, index })).filter(({ url }) => {
-    const slug = slugify(lastSegment(url));
+    const slug = oldSlug(url);
     if (existing.has(slug) || RESERVED.has(slug)) {
       stats.skipped++;
       return false;

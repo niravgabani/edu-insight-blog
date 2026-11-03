@@ -11,7 +11,7 @@
     "admin": "npm --prefix admin run dev",
     "build:all": "vite build && npm --prefix admin run build",
     "start": "npm --prefix server start",
-    "build:firebase": "vite build && npm --prefix admin run build -- --outDir ../dist/admin --emptyOutDir && node scripts/fetch-seo-files.mjs"
+    "build:firebase": "vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && npm --prefix admin run build -- --outDir ../dist/admin --emptyOutDir && node --env-file-if-exists=server/.env scripts/prerender.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

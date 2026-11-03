@@ -5,3 +5,5 @@ dist
 # Images uploaded from the admin panel
 server/uploads/
 .firebase/
+dist-ssr
+*-debug.log

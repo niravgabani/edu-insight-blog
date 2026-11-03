@@ -8,6 +8,7 @@ import Category from './pages/Category.jsx';
 import Search from './pages/Search.jsx';
 import Blog from './pages/Blog.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
+import About from './pages/About.jsx';
 import ContactUs from './pages/ContactUs.jsx';
 import NotFound from './pages/NotFound.jsx';
 
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/category/:slug" element={<Category />} />
         <Route path="/search" element={<Search />} />
         <Route path="/blog" element={<Blog />} />
+        <Route path="/about" element={<About />} />
         <Route path="/privacypolicy" element={<PrivacyPolicy />} />
         <Route path="/contactus" element={<ContactUs />} />
         <Route path="/:slug" element={<Article />} />

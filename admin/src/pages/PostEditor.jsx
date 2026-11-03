@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, slugify, SITE_URL, LANGUAGES } from '../api.js';
 import RichEditor from '../components/RichEditor.jsx';
@@ -27,6 +27,7 @@ export default function PostEditor() {
   const [post, setPost] = useState(isNew ? blank() : null);
   const [categories, setCategories] = useState([]);
   const [slugTouched, setSlugTouched] = useState(!isNew);
+  const savedSlug = useRef(''); // the URL as stored — kept exactly when it isn't edited
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -47,6 +48,7 @@ export default function PostEditor() {
     api(`/admin/posts/${id}`)
       .then((p) => {
         // Older articles have no language / SEO fields yet
+        savedSlug.current = p.slug;
         setPost({ ...blank(), ...p });
         setSlugTouched(true);
       })
@@ -75,7 +77,9 @@ export default function PostEditor() {
         const created = await api('/admin/posts', { method: 'POST', body: post });
         navigate(`/posts/${created.id}`, { replace: true });
       } else {
-        setPost({ ...blank(), ...(await api(`/admin/posts/${id}`, { method: 'PUT', body: post })) });
+        const saved = await api(`/admin/posts/${id}`, { method: 'PUT', body: post });
+        savedSlug.current = saved.slug;
+        setPost({ ...blank(), ...saved });
         setNotice('Article saved.');
       }
     } catch (ex) {
@@ -134,7 +138,7 @@ export default function PostEditor() {
                   setSlugTouched(true);
                   set('slug', e.target.value);
                 }}
-                onBlur={(e) => set('slug', slugify(e.target.value))}
+                onBlur={(e) => e.target.value !== savedSlug.current && set('slug', slugify(e.target.value))}
                 placeholder="article-url"
               />
             </div>

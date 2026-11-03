@@ -4,7 +4,7 @@ import ArticleCards from '../components/ArticleCards.jsx';
 import Pagination, { pageParam } from '../components/Pagination.jsx';
 import NotFound from './NotFound.jsx';
 import useSeo from '../useSeo.js';
-import { useApi, query } from '../api.js';
+import { useApi, paths } from '../api.js';
 import { useSite, Loading } from '../data/SiteData.jsx';
 
 const HERO_COUNT = 3;
@@ -17,10 +17,8 @@ export default function Category() {
   useSeo(category ? { category } : { notFound: true });
 
   // The newest 3 go in the slider; the paginated list starts after them
-  const hero = useApi(category ? `/api/posts${query({ category: slug, limit: HERO_COUNT })}` : null);
-  const list = useApi(
-    category ? `/api/posts${query({ category: slug, offset: HERO_COUNT, page: pageParam(params) })}` : null
-  );
+  const hero = useApi(category ? paths.categoryHero(slug, HERO_COUNT) : null);
+  const list = useApi(category ? paths.categoryList(slug, HERO_COUNT, pageParam(params)) : null);
 
   if (!category) return <NotFound />;
 

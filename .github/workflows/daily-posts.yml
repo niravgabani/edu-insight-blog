@@ -1,11 +1,15 @@
-# Writes and publishes new articles every day (server/scripts/daily-posts.js).
+# Every day: write new articles with Claude (server/scripts/daily-posts.js), then rebuild every page,
+# the sitemaps and the RSS feed (npm run build:firebase) and publish them on Firebase Hosting.
 #
 # Setup (GitHub repo → Settings → Secrets and variables → Actions):
-#   Secrets:   ANTHROPIC_API_KEY, MONGODB_URI  (required)
+#   Secrets:   MONGODB_URI                (required)
+#              ANTHROPIC_API_KEY          (writes the daily articles)
+#              FIREBASE_SERVICE_ACCOUNT   (publishes the site; JSON key of a service account with the
+#                                          "Firebase Hosting Admin" role)
 #              PEXELS_API_KEY, CLOUDINARY_URL  (optional, for article photos)
 #   Variables: DAILY_POSTS_COUNT, DAILY_POSTS_COUNTRIES, DAILY_POSTS_LANGUAGE,
 #              DAILY_POSTS_STATUS, DAILY_POSTS_MODEL  (optional, see the script for defaults)
-# MongoDB Atlas → Network Access must allow GitHub's servers (0.0.0.0/0).
+# Each part runs only when its secrets exist. MongoDB Atlas → Network Access must allow 0.0.0.0/0.
 name: Daily posts
 
 on:
@@ -14,37 +18,41 @@ on:
   workflow_dispatch: # "Run workflow" button in the Actions tab
     inputs:
       count:
-        description: Number of articles to write
+        description: Number of articles to write (0 = only rebuild and publish the site)
         default: '15'
 
 jobs:
-  write:
+  daily:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    defaults:
-      run:
-        working-directory: server
+    timeout-minutes: 150
     steps:
-      # Does nothing until the secrets are added, instead of failing every day
       - id: check
         run: |
-          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$MONGODB_URI" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"
-          else echo "::notice::Add the ANTHROPIC_API_KEY and MONGODB_URI secrets to enable daily posts."; fi
-        working-directory: .
+          if [ -n "$MONGODB_URI" ] && [ -n "$ANTHROPIC_API_KEY" ]; then echo "posts=true" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$MONGODB_URI" ] && [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; fi
+          if [ -z "$MONGODB_URI" ]; then echo "::notice::Add the MONGODB_URI secret to enable this workflow."; fi
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-      - if: steps.check.outputs.ready == 'true'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - if: steps.check.outputs.posts == 'true' || steps.check.outputs.deploy == 'true'
         uses: actions/checkout@v4
-      - if: steps.check.outputs.ready == 'true'
+      - if: steps.check.outputs.posts == 'true' || steps.check.outputs.deploy == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: server/package-lock.json
-      - if: steps.check.outputs.ready == 'true'
-        run: npm ci
-      - if: steps.check.outputs.ready == 'true'
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            admin/package-lock.json
+      - if: steps.check.outputs.posts == 'true' || steps.check.outputs.deploy == 'true'
+        run: npm ci --prefix server
+
+      - name: Write today's articles
+        if: steps.check.outputs.posts == 'true' && (github.event.inputs.count || vars.DAILY_POSTS_COUNT || '15') != '0'
+        working-directory: server
         run: node scripts/daily-posts.js --count "${{ github.event.inputs.count || vars.DAILY_POSTS_COUNT || 15 }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -55,3 +63,21 @@ jobs:
           DAILY_POSTS_LANGUAGE: ${{ vars.DAILY_POSTS_LANGUAGE }}
           DAILY_POSTS_STATUS: ${{ vars.DAILY_POSTS_STATUS }}
           DAILY_POSTS_MODEL: ${{ vars.DAILY_POSTS_MODEL }}
+
+      - name: Build every page, sitemaps and RSS
+        if: steps.check.outputs.deploy == 'true' && !cancelled()
+        run: |
+          npm ci
+          npm ci --prefix admin
+          npm run build:firebase
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+      - name: Publish on Firebase Hosting
+        if: steps.check.outputs.deploy == 'true' && !cancelled()
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: edu-insight-blog
+          channelId: live

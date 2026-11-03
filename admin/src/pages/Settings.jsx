@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, SITE_URL } from '../api.js';
 import ImageInput from '../components/ImageInput.jsx';
 
-const SITE_FIELDS = ['siteName', 'siteDomain', 'siteUrl', 'metaDescription', 'keywords', 'ogImage'];
+const SITE_FIELDS = ['siteName', 'siteDomain', 'siteUrl', 'metaDescription', 'keywords', 'ogImage', 'aboutText'];
 const pickSite = (s) => Object.fromEntries(SITE_FIELDS.map((k) => [k, s[k] || '']));
 
 export default function Settings({ onUserChange }) {
@@ -98,6 +98,15 @@ export default function Settings({ onUserChange }) {
                 Default share image (used when a page has no image)
                 <ImageInput value={site.ogImage} onChange={(v) => setSite({ ...site, ogImage: v })} />
               </div>
+              <label>
+                About Us page text (who runs the site and how articles are written — Google values this)
+                <textarea
+                  rows="7"
+                  value={site.aboutText}
+                  onChange={(e) => setSite({ ...site, aboutText: e.target.value })}
+                  placeholder="Leave empty to show the default text. Separate paragraphs with an empty line."
+                />
+              </label>
               <p className="muted small">
                 Sitemap for Google Search Console: <code>{(site.siteUrl || SITE_URL || window.location.origin).replace(/\/+$/, '')}/sitemap.xml</code>
               </p>

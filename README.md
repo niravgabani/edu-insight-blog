@@ -76,6 +76,15 @@ cd server
 node --env-file=.env scripts/daily-posts.js --count 2 --dry-run   # writes 2 articles without saving them
 ```
 
-## Firebase Hosting
+## Firebase Hosting (pre-rendered pages)
 
-`npm run build:firebase` builds the website into `dist/` and the admin panel into `dist/admin/`, ready for `firebase deploy`. Production builds call the API at `VITE_API_URL` (see `.env.production`).
+`npm run build:firebase` builds the website and admin panel, then writes a real HTML file for every page — each article, category and static page with its full content and SEO tags — plus `sitemap.xml`, `news-sitemap.xml`, `rss.xml`, `robots.txt` and `404.html` (`scripts/prerender.mjs`). Search engines and link previews get everything without running JavaScript; in the browser React takes over the page. It reads the database directly, so it needs `MONGODB_URI` (from `server/.env`), and takes about 3 minutes for ~8,500 pages.
+
+```bash
+npm run build:firebase
+firebase deploy --only hosting
+```
+
+The daily GitHub workflow does both after writing new articles when the `FIREBASE_SERVICE_ACCOUNT` secret is set. Articles added in the admin panel appear on the site immediately, and get their own pre-rendered page at the next build.
+
+Production builds call the API at `VITE_API_URL` (see `.env.production`).

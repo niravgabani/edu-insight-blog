@@ -1,7 +1,7 @@
 // Loads the site-wide content once (settings, categories, homepage sections, latest articles).
 // Article lists and single articles are loaded page by page — see ../api.js.
-import { createContext, useContext, useMemo } from 'react';
-import { useApi } from '../api.js';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useApi, API_URL, paths } from '../api.js';
 
 const SiteContext = createContext(null);
 
@@ -33,7 +33,22 @@ function buildSite({ settings, categories, home, latest }) {
 }
 
 export function SiteProvider({ children }) {
-  const { data, error } = useApi('/api/site');
+  const { data: initial, error } = useApi(paths.site);
+  // Pre-rendered pages (other than the homepage) carry a partial copy without the latest articles;
+  // the full version is loaded right after the page appears
+  const [full, setFull] = useState(null);
+  useEffect(() => {
+    if (!initial?.partial) return;
+    let active = true;
+    fetch(`${API_URL}/api/site`) // not the cache: it holds the partial copy
+      .then((r) => r.json())
+      .then((d) => active && setFull(d))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [initial]);
+  const data = full || initial;
   const site = useMemo(() => (data ? buildSite(data) : null), [data]);
 
   if (error)

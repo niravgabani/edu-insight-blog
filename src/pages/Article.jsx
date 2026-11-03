@@ -5,13 +5,13 @@ import NotFound from './NotFound.jsx';
 import useSeo from '../useSeo.js';
 import { isRtl } from '../seo.js';
 import { formatDate } from '../utils.js';
-import { useApi } from '../api.js';
+import { useApi, paths } from '../api.js';
 import { useSite, Loading } from '../data/SiteData.jsx';
 
 export default function Article() {
   const { slug } = useParams();
   const { getCategory, latest: newest } = useSite();
-  const { data, error } = useApi(`/api/posts/${encodeURIComponent(slug)}`);
+  const { data, error } = useApi(paths.article(slug));
   const post = data?.post;
   const postCategory = post && getCategory(post.category);
   useSeo(data === undefined ? { loading: true } : post ? { post, category: postCategory } : { notFound: true });
@@ -42,7 +42,7 @@ export default function Article() {
               <i className="fa-regular fa-folder"></i> {category.name}
             </Link>
           </div>
-          {post.image && <img src={post.image} alt={post.title} className="post-image" />}
+          {post.image && <img src={post.image} alt={post.title} className="post-image" fetchpriority="high" />}
           <div className="post-content" dir={dir}>
             {post.excerpt && <p className="lead">{post.excerpt}</p>}
             {/* Content is HTML written in the admin panel's editor */}

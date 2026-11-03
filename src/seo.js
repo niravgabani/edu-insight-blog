@@ -1,5 +1,5 @@
-// SEO tags for every page. Shared by the website (updates <head> while browsing)
-// and the API server (writes the same tags into the HTML so search engines and
+// SEO tags for every page. Shared by the website (updates <head> while browsing), the API server
+// and the pre-render script (both write the same tags into the HTML, so search engines and
 // social media previews see them without running JavaScript).
 
 const RTL = ['ar', 'he', 'fa', 'ur', 'ps', 'sd', 'yi'];
@@ -7,6 +7,7 @@ export const isRtl = (lang) => RTL.includes(String(lang || '').split('-')[0]);
 
 const STATIC_PAGES = {
   '/blog': { title: 'All Articles', description: (s) => `Browse all articles published on ${s}.` },
+  '/about': { title: 'About Us', description: (s) => `Who we are and how ${s} researches and publishes its articles.` },
   '/privacypolicy': { title: 'Privacy Policy', description: (s) => `Read the privacy policy of ${s}.` },
   '/contactus': { title: 'Contact Us', description: (s) => `Get in touch with the ${s} team.` },
   '/search': { title: 'Search', noindex: true },
@@ -20,6 +21,15 @@ const stripHtml = (html) =>
     .trim();
 
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : text);
+
+// The site's organisation, with the logo Google shows in search results (public/logo.png)
+const organization = (siteName, base) => ({
+  '@type': 'Organization',
+  '@id': `${base}/#organization`,
+  name: siteName,
+  url: `${base}/`,
+  logo: { '@type': 'ImageObject', url: `${base}/logo.png`, width: 512, height: 512 },
+});
 
 const absolute = (origin, url) => (!url ? '' : /^https?:\/\//.test(url) ? url : origin + (url.startsWith('/') ? url : `/${url}`));
 
@@ -74,9 +84,10 @@ export function pageMeta({ settings, origin, path, post, category, title, descri
           articleSection: cat.name,
           ...(post.keywords && { keywords: post.keywords }),
           mainEntityOfPage: { '@type': 'WebPage', '@id': url },
-          author: { '@type': 'Organization', name: siteName, url: `${base}/` },
-          publisher: { '@type': 'Organization', name: siteName, url: `${base}/` },
+          author: { '@type': 'Organization', name: siteName, url: `${base}/about` },
+          publisher: { '@id': `${base}/#organization` },
         },
+        organization(siteName, base),
         {
           '@type': 'BreadcrumbList',
           itemListElement: [
@@ -128,15 +139,23 @@ export function pageMeta({ settings, origin, path, post, category, title, descri
   if (path === '/')
     meta.jsonLd = {
       '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: siteName,
-      url: `${base}/`,
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: `${base}/search?q={search_term_string}`,
-        'query-input': 'required name=search_term_string',
-      },
+      '@graph': [
+        {
+          '@type': 'WebSite',
+          name: siteName,
+          url: `${base}/`,
+          publisher: { '@id': `${base}/#organization` },
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: `${base}/search?q={search_term_string}`,
+            'query-input': 'required name=search_term_string',
+          },
+        },
+        organization(siteName, base),
+      ],
     };
+  if (path === '/about')
+    meta.jsonLd = { '@context': 'https://schema.org', '@type': 'AboutPage', url, mainEntity: organization(siteName, base) };
   return meta;
 }
 
@@ -165,4 +184,21 @@ export function headTags(meta) {
     meta.jsonLd && ['script', { type: 'application/ld+json' }, JSON.stringify(meta.jsonLd).replace(/</g, '\\u003c')],
   ];
   return tags.filter(Boolean);
+}
+
+const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Writes the page's language, title and SEO tags into an HTML document (server and pre-render)
+export function injectHead(html, meta) {
+  const tags = headTags(meta)
+    .map(([tag, attrs, body]) => {
+      const a = Object.entries(attrs).map(([k, v]) => ` ${k}="${escAttr(v)}"`).join('');
+      return tag === 'script' ? `<script${a} data-seo>${body}</script>` : `<${tag}${a} data-seo />`;
+    })
+    .join('\n    ');
+  // Function replacers: article text may contain "$" patterns
+  return html
+    .replace(/<html lang="[^"]*"/, () => `<html lang="${escAttr(meta.lang)}"`)
+    .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escAttr(meta.title)}</title>`)
+    .replace('</head>', () => `    ${tags}\n  </head>`);
 }

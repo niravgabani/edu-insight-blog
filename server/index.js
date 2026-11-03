@@ -8,8 +8,21 @@ import * as mongo from './mongo.js';
 import { NO_ID } from './mongo.js';
 import { ensureDb } from './seed.js';
 import { makeToken, verifyToken, hashPassword, checkPassword } from './auth.js';
-import { pageMeta, headTags } from '../src/seo.js';
+import { pageMeta, injectHead } from '../src/seo.js';
 import * as cloudinary from './cloudinary.js';
+import {
+  NEWEST,
+  PUBLISHED,
+  HOME_LISTS,
+  SEO_SETTINGS,
+  escapeRegex,
+  getSettings,
+  getCategories,
+  siteData,
+  listPosts,
+  postDetail,
+} from './data.js';
+import * as feeds from './feeds.js';
 import cors from 'cors';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -36,14 +49,13 @@ app.use(cors({
 
 
 // Website routes a post slug can't use
-const RESERVED = new Set(['blog', 'search', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
-const HOME_LISTS = ['hero', 'popular', 'latest', 'trending', 'featured'];
-const NEWEST = { date: -1, createdAt: -1 };
+const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
 
 const slugify = (s) =>
   String(s || '')
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
+    .normalize('NFC') // recompose letters such as Korean syllables after removing accents
     .toLowerCase()
     .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '');
@@ -58,100 +70,32 @@ const bad = (res, error, code = 400) => res.status(code).json({ error });
 // Express 4 doesn't catch rejected promises — pass them to the error handler
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-const getSettings = () => mongo.settings().findOne({ _id: 'site' }, { projection: { _id: 0 } });
-const SEO_SETTINGS = ['siteUrl', 'metaDescription', 'keywords', 'ogImage'];
-const publicSettings = (s) => ({
-  siteName: s.siteName,
-  siteDomain: s.siteDomain,
-  ...Object.fromEntries(SEO_SETTINGS.map((k) => [k, s[k] || ''])),
-});
-const getCategories = () => mongo.categories().find({}, { projection: { _id: 0, position: 0 } }).sort({ position: 1 }).toArray();
-
 // ---------- Public API (used by the website) ----------
 
-// Articles are loaded page by page — the site has thousands of them.
-// Cards only need these fields; the full content is sent by /api/posts/:slug.
-const SUMMARY = { projection: { _id: 0, id: 1, slug: 1, title: 1, category: 1, date: 1, image: 1, excerpt: 1, lang: 1 } };
-const PUBLISHED = { status: 'published' };
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Articles are loaded page by page — the site has thousands of them (see data.js)
 const intParam = (value, fallback, max) => Math.min(Math.max(parseInt(value, 10) || fallback, 1), max);
 
-// Images uploaded to this server are stored as "/uploads/..." — make them absolute so they
-// also load when the website runs on another domain (e.g. Firebase Hosting)
+// Uploaded images ("/uploads/...") are made absolute with this server's address
 app.set('trust proxy', true);
-const uploadsBase = (req) => `${req.protocol}://${req.get('host')}`;
-const fixImage = (req, url) => (url?.startsWith('/uploads/') ? uploadsBase(req) + url : url);
-const fixSummary = (req) => ({ id, ...p }) => ({ ...p, image: fixImage(req, p.image) });
+const imageBase = (req) => `${req.protocol}://${req.get('host')}`;
 
 app.get(
   '/api/site',
-  wrap(async (req, res) => {
-    const [settings, categories, latest] = await Promise.all([
-      getSettings(),
-      getCategories(),
-      mongo.posts().find(PUBLISHED, SUMMARY).sort(NEWEST).limit(8).toArray(),
-    ]);
-    const h = settings.home || {};
-    const chosenIds = [...HOME_LISTS.flatMap((k) => h[k] || []), h.trendingImage].filter(Boolean);
-    const chosen = await mongo.posts().find({ ...PUBLISHED, id: { $in: chosenIds } }, SUMMARY).toArray();
-    const byId = new Map(chosen.map((p) => [p.id, p]));
-    const toPosts = (ids) => (ids || []).map((id) => byId.get(id)).filter(Boolean).map(fixSummary(req));
-
-    res.json({
-      settings: publicSettings(settings),
-      categories,
-      latest: latest.map(fixSummary(req)),
-      home: {
-        ...Object.fromEntries(HOME_LISTS.map((k) => [k, toPosts(h[k])])),
-        trendingImage: toPosts([h.trendingImage])[0] ?? null,
-        topCategories: (h.topCategories || []).filter((s) => categories.some((c) => c.slug === s)),
-      },
-    });
-  })
+  wrap(async (req, res) => res.json(await siteData({ imageBase: imageBase(req) })))
 );
 
 // List of articles: ?category=slug&q=search&page=1&limit=9&offset=0
 app.get(
   '/api/posts',
-  wrap(async (req, res) => {
-    const filter = { ...PUBLISHED };
-    if (req.query.category) filter.category = String(req.query.category);
-    const q = String(req.query.q || '').trim().slice(0, 100);
-    if (q) {
-      const re = new RegExp(escapeRegex(q), 'i');
-      filter.$or = [{ title: re }, { excerpt: re }, { keywords: re }];
-    }
-    const limit = intParam(req.query.limit, 9, 50);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-    const total = Math.max((await mongo.posts().countDocuments(filter)) - offset, 0);
-    const pages = Math.max(Math.ceil(total / limit), 1);
-    const page = Math.min(intParam(req.query.page, 1, 100000), pages);
-    const posts = await mongo
-      .posts()
-      .find(filter, SUMMARY)
-      .sort(NEWEST)
-      .skip(offset + (page - 1) * limit)
-      .limit(limit)
-      .toArray();
-    res.json({ posts: posts.map(fixSummary(req)), total, page, pages });
-  })
+  wrap(async (req, res) => res.json(await listPosts(req.query, imageBase(req))))
 );
 
 // One article with 3 related articles from the same category
 app.get(
   '/api/posts/:slug',
   wrap(async (req, res) => {
-    const post = await mongo.posts().findOne({ ...PUBLISHED, slug: req.params.slug }, { projection: { _id: 0, id: 0, status: 0, createdAt: 0 } });
-    if (!post) return bad(res, 'Article not found', 404);
-    const related = await mongo
-      .posts()
-      .find({ ...PUBLISHED, category: post.category, slug: { $ne: post.slug } }, SUMMARY)
-      .sort(NEWEST)
-      .limit(3)
-      .toArray();
-    post.image = fixImage(req, post.image);
-    post.content = post.content.replace(/(src=["'])\/uploads\//g, `$1${uploadsBase(req)}/uploads/`);
-    res.json({ post, related: related.map(fixSummary(req)) });
+    const detail = await postDetail(req.params.slug, imageBase(req));
+    detail ? res.json(detail) : bad(res, 'Article not found', 404);
   })
 );
 
@@ -276,7 +220,9 @@ admin.get(
 
 async function readPost(body, id) {
   const title = String(body.title || '').trim();
-  const slug = slugify(body.slug || title);
+  // An unchanged slug is kept as it is (imported articles keep their old site's exact URL)
+  const current = id && (await mongo.posts().findOne({ id }, { projection: { slug: 1 } }));
+  const slug = current && body.slug === current.slug ? current.slug : slugify(body.slug || title);
   if (!title) return { error: 'Title is required' };
   if (!slug) return { error: 'Slug is required' };
   if (RESERVED.has(slug)) return { error: `"${slug}" is reserved, please choose another slug` };
@@ -427,6 +373,7 @@ admin.put(
     }
     if (siteDomain !== undefined) $set.siteDomain = String(siteDomain).trim();
     for (const key of SEO_SETTINGS) if (req.body[key] !== undefined) $set[key] = text(req.body[key], 400);
+    if (req.body.aboutText !== undefined) $set.aboutText = text(req.body.aboutText, 10000);
     if ($set.siteUrl) {
       $set.siteUrl = $set.siteUrl.replace(/\/+$/, '');
       if (!/^https?:\/\/[^\s/]+$/i.test($set.siteUrl)) return bad(res, 'Site URL must look like https://www.example.com');
@@ -512,41 +459,13 @@ admin.post(
 // ---------- SEO: sitemap, robots.txt, tags in the page HTML ----------
 
 const originOf = (req, settings) => settings.siteUrl || `${req.protocol}://${req.get('host')}`;
-const escXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-app.get(
-  '/sitemap.xml',
-  wrap(async (req, res) => {
-    const [settings, categories, posts] = await Promise.all([
-      getSettings(),
-      getCategories(),
-      mongo.posts().find({ status: 'published' }, { projection: { slug: 1, date: 1, updatedAt: 1 } }).sort(NEWEST).toArray(),
-    ]);
-    const origin = originOf(req, settings);
-    const url = (path, lastmod) =>
-      `  <url><loc>${escXml(origin + encodeURI(path))}</loc>${lastmod ? `<lastmod>${lastmod.slice(0, 10)}</lastmod>` : ''}</url>`;
-    const newest = posts[0]?.updatedAt || posts[0]?.date;
-    const urls = [
-      url('/', newest),
-      url('/blog', newest),
-      ...categories.map((c) => url(`/category/${c.slug}`)),
-      ...posts.map((p) => url(`/${p.slug}`, p.updatedAt || p.date)),
-      url('/contactus'),
-      url('/privacypolicy'),
-    ];
-    res
-      .type('application/xml')
-      .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`);
-  })
-);
-
-app.get(
-  '/robots.txt',
-  wrap(async (req, res) => {
-    const origin = originOf(req, await getSettings());
-    res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /api/\nDisallow: /search\n\nSitemap: ${origin}/sitemap.xml\n`);
-  })
-);
+// Feeds are built by feeds.js (also used by the pre-render script)
+const feed = (type, build) =>
+  wrap(async (req, res) => res.type(type).send(await build(originOf(req, await getSettings()))));
+app.get('/sitemap.xml', feed('application/xml', feeds.sitemap));
+app.get('/news-sitemap.xml', feed('application/xml', feeds.newsSitemap));
+app.get('/rss.xml', feed('application/rss+xml', feeds.rss));
+app.get('/robots.txt', feed('text/plain', async (origin) => feeds.robots(origin)));
 
 // Works out the SEO data for a website URL (same rules as the website's useSeo hook)
 async function seoForRequest(req) {
@@ -562,7 +481,7 @@ async function seoForRequest(req) {
     return notFound();
   }
 
-  if (['/', '/privacypolicy', '/contactus'].includes(path)) return result({});
+  if (['/', '/about', '/privacypolicy', '/contactus'].includes(path)) return result({});
   if (path === '/search') return result({ title: req.query.q ? `Search: ${req.query.q}` : 'Search' });
   if (path === '/blog') {
     const page = Number(req.query.page) || 1;
@@ -580,22 +499,6 @@ async function seoForRequest(req) {
     return result({ post, category });
   }
   return notFound();
-}
-
-const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-function injectSeo(html, meta) {
-  const tags = headTags(meta)
-    .map(([tag, attrs, body]) => {
-      const a = Object.entries(attrs).map(([k, v]) => ` ${k}="${escAttr(v)}"`).join('');
-      return tag === 'script' ? `<script${a} data-seo>${body}</script>` : `<${tag}${a} data-seo />`;
-    })
-    .join('\n    ');
-  // Function replacers: article text may contain "$" patterns
-  return html
-    .replace(/<html lang="[^"]*"/, () => `<html lang="${escAttr(meta.lang)}"`)
-    .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${escAttr(meta.title)}</title>`)
-    .replace('</head>', () => `    ${tags}\n  </head>`);
 }
 
 // ---------- Static files ----------
@@ -619,7 +522,7 @@ if (fs.existsSync(siteDist)) {
         fs.promises.readFile(path.join(siteDist, 'index.html'), 'utf8'),
         seoForRequest(req),
       ]);
-      res.status(status).type('html').send(injectSeo(html, meta));
+      res.status(status).type('html').send(injectHead(html, meta));
     })
   );
 }
