@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import useSeo from '../useSeo.js';
 import { API_URL } from '../api.js';
+import { useSite } from '../data/SiteData.jsx';
 
 const empty = { name: '', email: '', subject: '', message: '' };
 
 export default function ContactUs() {
   useSeo();
+  const { settings } = useSite();
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [sent, setSent] = useState(false);
@@ -50,7 +52,16 @@ export default function ContactUs() {
       <h1>
         Contact <span>Us</span>
       </h1>
-      <p>Have a question, suggestion or feedback? Send us a message and we will get back to you.</p>
+      <p>
+        Have a question, suggestion, correction or business enquiry? Send us a message and we will get back to you
+        within 2 working days.
+      </p>
+      {settings.contactEmail && (
+        <p>
+          <i className="fa-solid fa-envelope"></i> Email:{' '}
+          <a href={`mailto:${settings.contactEmail}`}>{settings.contactEmail}</a>
+        </p>
+      )}
 
       {sent ? (
         <div className="form-success">

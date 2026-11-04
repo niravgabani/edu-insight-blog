@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, SITE_URL } from '../api.js';
 import ImageInput from '../components/ImageInput.jsx';
 
-const SITE_FIELDS = ['siteName', 'siteDomain', 'siteUrl', 'metaDescription', 'keywords', 'ogImage', 'aboutText'];
+const SITE_FIELDS = ['siteName', 'siteDomain', 'siteUrl', 'metaDescription', 'keywords', 'ogImage', 'aboutText', 'contactEmail'];
 const pickSite = (s) => Object.fromEntries(SITE_FIELDS.map((k) => [k, s[k] || '']));
 
 export default function Settings({ onUserChange }) {
@@ -105,6 +105,15 @@ export default function Settings({ onUserChange }) {
                   value={site.aboutText}
                   onChange={(e) => setSite({ ...site, aboutText: e.target.value })}
                   placeholder="Leave empty to show the default text. Separate paragraphs with an empty line."
+                />
+              </label>
+              <label>
+                Contact email (shown on Contact Us, Privacy Policy, Terms and Disclaimer pages — AdSense reviewers look for it)
+                <input
+                  type="email"
+                  value={site.contactEmail}
+                  onChange={(e) => setSite({ ...site, contactEmail: e.target.value })}
+                  placeholder="contact@dailyinfoscope.com"
                 />
               </label>
               <p className="muted small">

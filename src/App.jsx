@@ -10,6 +10,8 @@ import Blog from './pages/Blog.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import About from './pages/About.jsx';
 import ContactUs from './pages/ContactUs.jsx';
+import Terms from './pages/Terms.jsx';
+import Disclaimer from './pages/Disclaimer.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 function ScrollToTop() {
@@ -33,6 +35,8 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/privacypolicy" element={<PrivacyPolicy />} />
         <Route path="/contactus" element={<ContactUs />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/disclaimer" element={<Disclaimer />} />
         <Route path="/:slug" element={<Article />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

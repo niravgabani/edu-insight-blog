@@ -64,7 +64,7 @@ async function main() {
 
   page('index.html', '/', meta('/'), { [paths.site]: full });
   page('blog.html', '/blog', meta('/blog', { title: 'All Articles' }), { ...site, [paths.blog(1)]: await listPosts({ page: 1 }, API_URL) });
-  for (const p of ['about', 'privacypolicy', 'contactus']) page(`${p}.html`, `/${p}`, meta(`/${p}`), site);
+  for (const p of ['about', 'privacypolicy', 'contactus', 'terms', 'disclaimer']) page(`${p}.html`, `/${p}`, meta(`/${p}`), site);
   page('search.html', '/search', meta('/search', { title: 'Search' }), site);
 
   for (const c of categories) {
@@ -75,7 +75,7 @@ async function main() {
       [paths.categoryList(c.slug, HERO_COUNT, 1)]: await listPosts({ category: c.slug, offset: HERO_COUNT, page: 1 }, API_URL),
     });
   }
-  console.log(`Pages: home, blog, 4 static, ${categories.length} categories.`);
+  console.log(`Pages: home, blog, 6 static, ${categories.length} categories.`);
 
   const slugs = (await mongo.posts().find(PUBLISHED, { projection: { _id: 0, slug: 1 } }).sort(NEWEST).toArray()).map((p) => p.slug);
   const byCategory = new Map(categories.map((c) => [c.slug, c]));

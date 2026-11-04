@@ -202,7 +202,7 @@ const slugify = (s) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 90);
 
-const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
+const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'terms', 'disclaimer', 'category', 'admin', 'api', 'uploads']);
 
 async function uniqueSlug(base) {
   let slug = slugify(base) || `article-${Date.now()}`;

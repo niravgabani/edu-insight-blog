@@ -21,6 +21,7 @@ export const publicSettings = (s) => ({
   siteDomain: s.siteDomain,
   ...Object.fromEntries(SEO_SETTINGS.map((k) => [k, s[k] || ''])),
   aboutText: s.aboutText || '',
+  contactEmail: s.contactEmail || '',
 });
 
 // Images uploaded to the API server are stored as "/uploads/..."; make them absolute so they

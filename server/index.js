@@ -49,7 +49,7 @@ app.use(cors({
 
 
 // Website routes a post slug can't use
-const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'category', 'admin', 'api', 'uploads']);
+const RESERVED = new Set(['blog', 'search', 'about', 'privacypolicy', 'contactus', 'terms', 'disclaimer', 'category', 'admin', 'api', 'uploads']);
 
 const slugify = (s) =>
   String(s || '')
@@ -374,6 +374,10 @@ admin.put(
     if (siteDomain !== undefined) $set.siteDomain = String(siteDomain).trim();
     for (const key of SEO_SETTINGS) if (req.body[key] !== undefined) $set[key] = text(req.body[key], 400);
     if (req.body.aboutText !== undefined) $set.aboutText = text(req.body.aboutText, 10000);
+    if (req.body.contactEmail !== undefined) {
+      $set.contactEmail = text(req.body.contactEmail, 200);
+      if ($set.contactEmail && !/^\S+@\S+\.\S+$/.test($set.contactEmail)) return bad(res, 'Contact email is not valid');
+    }
     if ($set.siteUrl) {
       $set.siteUrl = $set.siteUrl.replace(/\/+$/, '');
       if (!/^https?:\/\/[^\s/]+$/i.test($set.siteUrl)) return bad(res, 'Site URL must look like https://www.example.com');
@@ -481,7 +485,7 @@ async function seoForRequest(req) {
     return notFound();
   }
 
-  if (['/', '/about', '/privacypolicy', '/contactus'].includes(path)) return result({});
+  if (['/', '/about', '/privacypolicy', '/contactus', '/terms', '/disclaimer'].includes(path)) return result({});
   if (path === '/search') return result({ title: req.query.q ? `Search: ${req.query.q}` : 'Search' });
   if (path === '/blog') {
     const page = Number(req.query.page) || 1;

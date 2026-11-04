@@ -10,6 +10,8 @@ const STATIC_PAGES = {
   '/about': { title: 'About Us', description: (s) => `Who we are and how ${s} researches and publishes its articles.` },
   '/privacypolicy': { title: 'Privacy Policy', description: (s) => `Read the privacy policy of ${s}.` },
   '/contactus': { title: 'Contact Us', description: (s) => `Get in touch with the ${s} team.` },
+  '/terms': { title: 'Terms and Conditions', description: (s) => `The terms and conditions for using ${s}.` },
+  '/disclaimer': { title: 'Disclaimer', description: (s) => `Disclaimer for the information published on ${s}.` },
   '/search': { title: 'Search', noindex: true },
 };
 
